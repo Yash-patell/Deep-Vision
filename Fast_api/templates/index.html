@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepfake Video Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #f3f4f6;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .upload-container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            text-align: center;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .custom-file-upload:hover {
+            background: #0056b3;
+        }
+
+        button {
+            background: #28a745;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #218838;
+        }
+
+        video {
+           
+         
+            margin-top: 20px;
+            width: 100%;
+            border-radius: 12px;
+      
+        }
+
+        #prediction {
+            margin-top: 20px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Deepfake Video Detection</h1>
+    <div class="upload-container">
+        <label for="videoUpload" class="custom-file-upload">Choose Video</label>
+        <input type="file" id="videoUpload" accept="video/*" onchange="uploadVideo(event)">
+        <video id="videoPreview" hidden controls></video>
+        <button onclick="startPrediction()">Predict</button>
+        <div id="prediction"></div>
+    </div>
+
+    <script>
+        let uploadedFilename = '';
+
+        async function uploadVideo(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/upload/', {
+        method: 'POST',
+        body: formData
+    });
+
+    const result = await response.json();
+    uploadedFilename = result.filename;
+
+    const video = document.getElementById('videoPreview');
+    video.src = URL.createObjectURL(file);
+    video.hidden = false;
+    document.getElementById('predictButton').disabled = false;
+
+    // Don't show the video yet! Remove these lines:
+    // const video = document.getElementById('videoPreview');
+    // video.src = URL.createObjectURL(file);
+    // video.hidden = false;
+}
+
+
+function startPrediction() {
+    if (!uploadedFilename) {
+        alert('Please upload a video first!');
+        return;
+    }
+    const video = document.getElementById('videoPreview');
+    video.src = `/temp_videos/${uploadedFilename}`;
+    video.hidden = false;
+
+
+    
+
+    video.addEventListener('loadeddata', function() {
+        console.log("Video loaded, starting playback and prediction.");
+        video.play(); // Start video playback automatically
+
+        const socket = new WebSocket("ws://127.0.0.1:8000/live-predict/");
+
+        socket.onopen = () => {
+            console.log("WebSocket connected");
+
+            // Function to send filename and current video time
+            function sendPredictionRequest() {
+                const currentTime = video.currentTime;
+                const message = JSON.stringify({
+                    filename: uploadedFilename,
+                    timestamp: currentTime // Send current video time
+                });
+                socket.send(message);
+                console.log("Sent filename and timestamp:", uploadedFilename, currentTime);
+            }
+
+            // Send initial request
+            sendPredictionRequest();
+
+            // Send requests at regular intervals (e.g., every 0.5 seconds)
+            setInterval(sendPredictionRequest, 500); // Adjust interval as needed
+        };
+
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                console.log("Prediction received:", event.data);
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                const prediction = document.getElementById('prediction');
+                // prediction.innerText = `Frame ${data.frame_number} (Time: ${data.timestamp}): ${data.label} (${data.confidence}%)`; // Update timestamp in prediction
+                prediction.innerText = ` Prediction: ${data.label} (${data.confidence}%)`; // Update timestamp in prediction
+            } catch (e) {
+                console.error("Error parsing WebSocket message:", e);
+                alert("Error processing prediction data.");
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            alert("WebSocket connection error.");
+        };
+
+        socket.onclose = () => console.log("Prediction finished.");
+    }, { once: true });
+
+    video.addEventListener('error', function(error) {
+        console.error("Video loading error:", error);
+        alert("There was an error loading the video.");
+    });
+}
+    
+
+    </script>
+</body>
+</html>
