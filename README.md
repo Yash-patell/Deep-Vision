@@ -41,9 +41,15 @@ deep_vision/
 
 ## Running the project 
 
-### To run the streamlit app : <pre>  streamlit run app_xception.py </pre>
+### To run the streamlit app : 
+```bash
+streamlit run app_xception.py
+```
 
-### To run the fast api app : <pre> fastapi run xception_api.py </pre>
+### To run the fast api app : 
+```bash
+fastapi run xception_api.py 
+```
 
 <br>
 
